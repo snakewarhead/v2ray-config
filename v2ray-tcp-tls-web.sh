@@ -37,7 +37,8 @@ systemctl stop v2ray
 # ----------------3
 domainName="$1"
 portOutter="$2"
-portInner="$(shuf -i 20000-65000 -n 1)"
+portInnerV2ray="$(shuf -i 20000-45000 -n 1)"
+portInnerNginx="$(shuf -i 45000-65000 -n 1)"
 uuid="$(uuidgen)"
 
 haproxyConfig="/etc/haproxy/haproxy.cfg"
@@ -55,13 +56,15 @@ if [ "$local_ip" != "$resolve_ip" ]; then
 fi
 
 # ----------------4
+sslDir="/root/.acme.sh/${domainName}_ecc"
+
 if ! [ -d /root/.acme.sh ]; then curl https://get.acme.sh | sh; fi
 ~/.acme.sh/acme.sh --issue -d "$domainName" --standalone --keylength ec-256 --force
 
 echo -n "#!/bin/bash
 /etc/init.d/nginx stop
 wait;/root/.acme.sh/acme.sh --cron --home /root/.acme.sh &> /root/renew_ssl.log
-wait;cat /root/.acme.sh/${domainName}_ecc/fullchain.cer /root/.acme.sh/${domainName}_ecc/${domainName}.key > /root/.acme.sh/${domainName}_ecc/${domainName}.pem
+wait;cat ${sslDir}/fullchain.cer ${sslDir}/${domainName}.key > ${sslDir}/${domainName}.pem
 wait;/etc/init.d/nginx start
 " >/usr/local/bin/ssl_renew.sh
 chmod +x /usr/local/bin/ssl_renew.sh
@@ -69,3 +72,99 @@ chmod +x /usr/local/bin/ssl_renew.sh
     crontab -l
     echo "15 03 * * * /usr/local/bin/ssl_renew.sh"
 ) | crontab
+
+# ----------------5
+echo '
+{
+    "inbounds": [
+        {
+            "protocol": "vmess",
+            "listen": "127.0.0.1",
+            "port": '$portInnerV2ray',
+            "settings": {
+                "clients": [
+                    {
+                        "id": '"\"$uuid\""'
+                    }
+                ]
+            },
+            "streamSettings": {
+                "network": "tcp"
+            }
+        }
+    ],
+    "outbounds": [
+        {
+            "protocol": "freedom"
+        }
+    ]
+}
+' > $v2rayConfig
+
+echo "
+server {
+  listen $portInnerNginx;
+  server_name $domainName;
+  root /var/www/html;
+}
+" > $nginxConfig
+
+echo "
+global
+    log /dev/log local0
+    log /dev/log local1 notice
+    chroot /var/lib/haproxy
+    stats socket /run/haproxy/admin.sock mode 660 level admin expose-fd listeners
+    stats timeout 30s
+    user haproxy
+    group haproxy
+    daemon
+    ca-base /etc/ssl/certs
+    crt-base /etc/ssl/private
+
+    # 仅使用支持 FS 和 AEAD 的加密套件
+    ssl-default-bind-ciphers ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305:DHE-RSA-AES128-GCM-SHA256:DHE-RSA-AES256-GCM-SHA384
+    ssl-default-bind-ciphersuites TLS_AES_128_GCM_SHA256:TLS_AES_256_GCM_SHA384:TLS_CHACHA20_POLY1305_SHA256
+    # 禁用 TLS 1.2 之前的 TLS
+    ssl-default-bind-options no-sslv3 no-tlsv10 no-tlsv11
+
+    tune.ssl.default-dh-param 2048
+
+defaults
+    log global
+    # 我们需要使用 tcp 模式
+    mode tcp
+    option dontlognull
+    timeout connect 5s
+    # 空闲连接等待时间，这里使用与 V2Ray 默认 connIdle 一致的 300s
+    timeout client  300s
+    timeout server  300s
+
+frontend tls-in
+    # 监听 443 tls，tfo 根据自身情况决定是否开启，证书放置于 /etc/ssl/private/example.com.pem
+    bind *:${portOutter} tfo ssl crt ${sslDir}/${domainName}.pem
+    tcp-request inspect-delay 5s
+    tcp-request content accept if HTTP
+    # 将 HTTP 流量发给 web 后端
+    use_backend web if HTTP
+    # 将其他流量发给 vmess 后端
+    default_backend vmess
+
+backend web
+    server server1 127.0.0.1:$portInnerNginx
+  
+backend vmess
+    server server1 127.0.0.1:$portInnerV2ray
+" > $haproxyConfig
+
+# ----------------6
+systemctl restart haproxy
+systemctl restart nginx
+systemctl restart v2ray
+
+# ----------------7
+echo "
+域名: $domainName
+端口: $portOutter
+UUID: $uuid
+方式: tcp + tls + web
