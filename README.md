@@ -3,5 +3,5 @@
 ## install
 
 ```cmd
-curl -s https://raw.githubusercontent.com/snakewarhead/v2ray-config/main/v2ray_installation_vmess.sh | bash -s "domain" "port"
+curl -s https://raw.githubusercontent.com/snakewarhead/v2ray-config/main/v2ray-tcp-tls-web.sh | bash -s "domain" "port"
 ```
