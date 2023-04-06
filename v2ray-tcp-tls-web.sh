@@ -60,6 +60,7 @@ sslDir="/root/.acme.sh/${domainName}_ecc"
 
 if ! [ -d /root/.acme.sh ]; then curl https://get.acme.sh | sh; fi
 ~/.acme.sh/acme.sh --issue -d "$domainName" --standalone --keylength ec-256 --force
+cat ${sslDir}/fullchain.cer ${sslDir}/${domainName}.key > ${sslDir}/${domainName}.pem
 
 echo -n "#!/bin/bash
 /etc/init.d/nginx stop
@@ -168,3 +169,4 @@ echo "
 端口: $portOutter
 UUID: $uuid
 方式: tcp + tls + web
+"
