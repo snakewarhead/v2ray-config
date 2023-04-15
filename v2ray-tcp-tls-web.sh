@@ -59,6 +59,7 @@ fi
 sslDir="/root/.acme.sh/${domainName}_ecc"
 
 if ! [ -d /root/.acme.sh ]; then curl https://get.acme.sh | sh; fi
+~/.acme.sh/acme.sh --set-default-ca --server letsencrypt
 ~/.acme.sh/acme.sh --issue -d "$domainName" --standalone --keylength ec-256 --force
 cat ${sslDir}/fullchain.cer ${sslDir}/${domainName}.key > ${sslDir}/${domainName}.pem
 
@@ -153,7 +154,7 @@ frontend tls-in
 
 backend web
     server server1 127.0.0.1:$portInnerNginx
-  
+
 backend vmess
     server server1 127.0.0.1:$portInnerV2ray
 " > $haproxyConfig
