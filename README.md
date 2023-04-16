@@ -1,5 +1,9 @@
 # v2ray-config
 
+## prepare
+
+防火墙打开端口: 80, <port>
+
 ## install
 
 ```cmd
