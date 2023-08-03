@@ -68,6 +68,7 @@ echo -n "#!/bin/bash
 wait;/root/.acme.sh/acme.sh --cron --home /root/.acme.sh --force &> /root/renew_ssl.log
 wait;cat ${sslDir}/fullchain.cer ${sslDir}/${domainName}.key > ${sslDir}/${domainName}.pem
 wait;/etc/init.d/nginx start
+wait;/etc/init.d/haproxy restart
 " >/usr/local/bin/ssl_renew.sh
 chmod +x /usr/local/bin/ssl_renew.sh
 (
