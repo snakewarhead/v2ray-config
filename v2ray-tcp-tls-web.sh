@@ -65,7 +65,7 @@ cat ${sslDir}/fullchain.cer ${sslDir}/${domainName}.key > ${sslDir}/${domainName
 
 echo -n "#!/bin/bash
 /etc/init.d/nginx stop
-wait;/root/.acme.sh/acme.sh --cron --home /root/.acme.sh &> /root/renew_ssl.log
+wait;/root/.acme.sh/acme.sh --cron --home /root/.acme.sh --force &> /root/renew_ssl.log
 wait;cat ${sslDir}/fullchain.cer ${sslDir}/${domainName}.key > ${sslDir}/${domainName}.pem
 wait;/etc/init.d/nginx start
 " >/usr/local/bin/ssl_renew.sh
